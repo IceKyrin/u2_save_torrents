@@ -12,3 +12,12 @@ pip install qbittorrent-api
 填写config.py，直接运行main.py
 其中token为A佬api所需，详见https://github.com/kysdm/u2_api
 自动化鉴权脚本 https://greasyfork.org/zh-CN/scripts/428545
+
+docker部署（仅限x86架构）：
+下载config.py并填写内容
+拉取镜像：
+docker pull mkxiaolang/auto_save_torrents:latest
+docker run \
+  --name auto_save_torrents \
+  -v /xxx/xxx/config.py:/auto_save_torrents/config.py \
+ mkxiaolang/auto_save_torrents:latest
