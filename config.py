@@ -30,7 +30,7 @@ download_num = 2
 minimum = 1
 maximum = 2
 
-# 是否释放魔法，每次最大花费（每金为10000），魔法持续时间最低24，生效范围"ALL"/"SELF"
+# 是否释放魔法，每次最大花费（每金为10000），费用超了这个种子直接跳过不下。魔法持续时间最低24，生效范围"ALL"/"SELF"
 magic = True
 max_cost = 15000
 magic_hours = 24
