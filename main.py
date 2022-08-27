@@ -10,35 +10,36 @@ import requests
 import datetime
 import qbittorrentapi
 from retry import retry
+from loguru import logger
 
-header = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ApplewebKit/537.36 (KHtml, like Gecko) Chrome/80.0.3987.163 Safari/537.36',
-}
+# 日志文件
+LOG_DIR = os.path.expanduser("./logs")
+LOG_FILE = os.path.join(LOG_DIR, "file_{time}.log")
+if not os.path.exists(LOG_DIR):
+    os.mkdir(LOG_DIR)
+logger.add(LOG_FILE, rotation="7 days", level=config.level, backtrace=True, diagnose=True, encoding="utf-8")
+
+header = config.header
 
 
 def download_torrent(torrent_id):
     url = "https://u2.dmhy.org/download.php?id=%s" % torrent_id
     try:
         if config.proxy:
-            r = requests.get(url, headers=header, proxies=config.proxies, timeout=30, verify=False)  # 发送请求
+            r = requests.get(url, headers=header, proxies=config.proxies, timeout=30, verify=config.verify)  # 发送请求
         else:
-            r = requests.get(url, headers=header, timeout=20, verify=False)  # 发送请求
+            r = requests.get(url, headers=header, timeout=20, verify=config.verify)  # 发送请求
+        # 保存
+        with open('./torrents/%s.torrent' % torrent_id, 'wb') as f:
+            f.write(r.content)
+        logger.debug("种子下载完毕")
+
     except Exception as e:
-        print(e)
-        try:
-            if config.proxy:
-                r = requests.get(url, headers=header, proxies=config.proxies, timeout=30, verify=False)  # 发送请求
-            else:
-                r = requests.get(url, headers=header, timeout=20, verify=False)  # 发送请求
-        except Exception as e:
-            print(e)
-    # 保存
-    with open('./torrents/%s.torrent' % torrent_id, 'wb') as f:
-        f.write(r.content)
-    print("种子下载完毕")
+        logger.warning(e)
+        logger.warning("种子下载失败")
 
 
-@retry(tries=2, delay=15)
+@retry(tries=3, delay=2)
 def magic_use(sta, torrent_id):
     use = "" if sta else "test=1"
     url = "https://u2.dmhy.org/promotion.php?" + use
@@ -48,34 +49,59 @@ def magic_use(sta, torrent_id):
             "base_self": 350,
             "comment": None,
             "divergence": 9.331,
-            "dr": 1.00,
+            "dr": config.download_ratio,
             "hours": config.magic_hours,
             "promotion": 2,
             "start": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "torrent": torrent_id,
             "tsize": round(time.time()),
-            "ttl": 526,
-            "ur": 1.00,
+            "ur": config.upload_ratio,
             "user": config.magic_scope,
             "user_other": None}
-    if magic_sta(torrent_id) != 0:
+    try:
         if config.proxy:
             res = requests.post(url=url, data=data, headers=header, proxies=config.proxies, timeout=5,
-                                verify=False).text
+                                verify=config.verify)
         else:
-            res = requests.post(url=url, data=data, headers=header, verify=False).text
-        # cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>", res).group(1).split(".")[0].replace(",", ""))
-    return res
+            res = requests.post(url=url, data=data, headers=header, verify=config.verify)
+        if str(res) == '<Response [200]>' and sta:
+            logger.info("魔法释放成功")
+            return True
+        elif str(res) == '<Response [200]>' and not sta:
+            cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>", res.text).group(1).split(".")[0].replace(",", ""))
+            logger.debug("获取魔法费用成功")
+            return cost
+        return False
+    except Exception as e:
+        logger.warning(e)
 
 
-@retry(tries=5, delay=1)
-def magic_sta(torrent_id):
-    url = "https://u2.kysdm.com/api/v1/promotion_super/?token=%s&uid=%s&torrent_id=%s" % (
+def compare_time(t1, t2):
+    t0 = int(str(round(time.time())))
+    t1 = int(time.mktime(time.strptime(t1, '%Y-%m-%dT%H:%M:%S')))
+    t2 = int(time.mktime(time.strptime(t2, '%Y-%m-%dT%H:%M:%S')))
+    if t1 > t0:
+        return t2 - t1
+    else:
+        return 0
+
+
+@retry(tries=5, delay=2)
+def magic_free_time(torrent_id):
+    url = "https://u2.kysdm.com/api/v1/promotion_specific/?token=%s&uid=%s&torrent_id=%s" % (
         config.token, config.uid, torrent_id)
     res = requests.get(url, timeout=3).text
-    state = json.loads(res)["data"]["promotion_super"][0]["ratio"]
-    ratio = float(state.split("/")[-1])
-    return ratio
+    magic_list = json.loads(res)["data"]["promotion"]
+    time_list = []
+    for i in magic_list:
+        t = compare_time(i["from_time"], i["expiration_time"])
+        ratio = float(i["ratio"].split("/")[-1])
+        if i["for_user_name"] == "[i]所有人[/i]" and ratio == 0:
+            time_list.append(t)
+        else:
+            time_list.append(0)
+    logger.debug(time_list)
+    return max(time_list)
 
 
 @retry(tries=5, delay=2)
@@ -87,32 +113,48 @@ def get_torrent(num):
     return torrent_list
 
 
-def push_torrent(file_name):
-    qbt_client.torrents_add(torrent_files=file_name, save_path=config.save_path, is_paused=config.paused)
+def hash_to_id(torrent_hash):
+    url = "https://u2.kysdm.com/api/v1/history/?token=%s&maximum=1&uid=%s&hash=%s" % (
+        config.token, config.uid, torrent_hash)
+    res = requests.get(url, timeout=8).text
+    torrent_id = json.loads(res)["data"]["history"][0]["torrent_id"]
+    return torrent_id
+
+
+def push_torrent(torrent_id, file_name):
+    path = config.save_path
+    if config.add_id:
+        path = path + "/%s/" % torrent_id
+    qbt_client.torrents_add(torrent_files=file_name, save_path=path, is_paused=config.paused)
 
 
 def pluck(lst, key):
     return [x.get(key) for x in lst]
 
 
-header["cookie"] = config.cookie
-if not os.path.exists("torrents"):
-    os.mkdir("torrents")
-while True:
+def qb_login():
     try:
         # 登陆
         qbt_client = qbittorrentapi.Client(host=config.CLIENT_IP, port=config.CLIENT_PORT, username=config.CLIENT_USER,
                                            password=config.CLIENT_PASSWORD)
         qbt_client.auth_log_in()
-        print("登录qb成功")
+        logger.info("登录qb成功")
+        return qbt_client
     except Exception as e:
-        print(e)
-        print("登录失败，请检查qb webui 的ip、端口及账号密码")
+        logger.warning(e)
+        logger.warning("登录失败，请检查qb webui 的ip、端口及账号密码")
+
+
+header["cookie"] = config.cookie
+if not os.path.exists("torrents"):
+    os.mkdir("torrents")
+while True:
+    qbt_client = qb_login()
     try:
         if config.BDMV:
-            # 获取下载数x20的列表
-            raw_lists = get_torrent(20)
-            print("拉取孤种列表成功")
+            # 获取下载数x50的列表
+            raw_lists = get_torrent(50)
+            logger.debug("拉取孤种列表成功")
             torrent_lists = []
             # 筛选出原盘
             for info in raw_lists:
@@ -121,30 +163,43 @@ while True:
         else:
             # 获取下载数x5的列表
             torrent_lists = get_torrent(5)
-            print("拉取孤种列表成功")
+            logger.debug("拉取孤种列表成功")
         # 随机筛选出下载的种子（防止拉孤种时和其他人撞车）
-        download_list = random.sample(pluck(torrent_lists, 'torrent_id'), config.download_num)
-        print(download_list)
+        res_id = pluck(torrent_lists, 'torrent_id')
+        if len(res_id) >= config.download_num:
+            download_list = random.sample(res_id, config.download_num)
+        else:
+            logger.info("原盘孤种较少，本次不推送")
+            continue
+        logger.debug(download_list)
         for t_id in download_list:
-            print(t_id)
-            if magic_sta(t_id) == 0:
-                print("蹭到了其他大佬的Free")
+            logger.info("当前种子id为：%s" % t_id)
+            if magic_free_time(t_id) > config.free_hours * 3600:
+                magic_res = True
+                logger.info("蹭到了其他大佬的Free")
             else:
                 if config.magic:
-                    print("准备释放魔法")
-                    magic_use(config.magic, t_id)
-                    print("魔法释放完毕")
-            if config.down:
+                    logger.debug("准备释放魔法")
+                    m_cost = magic_use(False, t_id)
+                    # 判断释放魔法并下载，或跳过（花费过高）
+                    if m_cost < config.max_cost:
+                        magic_res = magic_use(config.magic, t_id)
+                    else:
+                        logger.info("魔法花费过高:%s,跳过此种子" % m_cost)
+                        continue
+                else:
+                    magic_res = True
+            if magic_res and config.down:
                 for _ in range(3):
                     if os.path.exists("./torrents/%s.torrent" % t_id):
-                        print("种子已存在")
-                        push_torrent("./torrents/%s.torrent" % t_id)
-                        print("种子推送完毕")
+                        logger.debug("种子已存在")
+                        push_torrent(t_id, "./torrents/%s.torrent" % t_id)
+                        logger.info("种子推送完毕")
                         break
                     else:
-                        print("id：%s 种子开始下载" % t_id)
+                        logger.debug("id：%s 种子开始下载" % t_id)
                         download_torrent(t_id)
     except Exception as e:
-        print(e)
-    print("开始待机")
+        logger.warning(e)
+    logger.info("本次流程完毕，开始待机")
     time.sleep(config.interval * 3600)
