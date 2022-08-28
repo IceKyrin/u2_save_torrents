@@ -23,7 +23,7 @@ cookie = ""
 interval = 24
 # 设为False后，就变成只给大家放魔、自己不下载刷流的福利脚本
 down = True
-# 每次下载数量
+# 每次下载数量；只保BDMV/DVDISO时，一次3-5个就不少了，别太高
 download_num = 2
 
 # 孤种筛选条件（最大/最小做种人数）
