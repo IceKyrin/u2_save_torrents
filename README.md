@@ -2,6 +2,7 @@
 
 一个u2自动放魔/拉孤种的脚本，调用了Azusa巨佬的api：https://github.com/kysdm/u2_api
 
+存在永久Free老种不识别情况，此种跳过，api数据库需要时间更新
 
 运行逻辑：
 
