@@ -60,7 +60,7 @@ def magic_use(sta, torrent_id):
             "user_other": None}
     try:
         if config.proxy:
-            res = requests.post(url=url, data=data, headers=header, proxies=config.proxies, timeout=5,
+            res = requests.post(url=url, data=data, headers=header, proxies=config.proxies, timeout=8,
                                 verify=config.verify)
         else:
             res = requests.post(url=url, data=data, headers=header, verify=config.verify)
@@ -77,26 +77,43 @@ def magic_use(sta, torrent_id):
 
 
 def compare_time(t1, t2):
-    t0 = int(str(round(time.time())))
-    t1 = int(time.mktime(time.strptime(t1, '%Y-%m-%dT%H:%M:%S')))
-    t2 = int(time.mktime(time.strptime(t2, '%Y-%m-%dT%H:%M:%S')))
-    if t0 > t1:
-        return t2 - t1
-    else:
-        return 0
+    try:
+        t0 = int(str(round(time.time())))
+        t1 = int(time.mktime(time.strptime(t1, '%Y-%m-%dT%H:%M:%S')))
+        t2 = int(time.mktime(time.strptime(t2, '%Y-%m-%dT%H:%M:%S')))
+        if t0 > t1:
+            return t2 - t1
+        else:
+            return 0
+    except Exception as e:
+        logger.warning(e)
+
+
+@retry(tries=5, delay=2)
+def magic_sta(torrent_id):
+    url = "https://u2.kysdm.com/api/v1/promotion_super/?token=%s&uid=%s&torrent_id=%s" % (
+        config.token, config.uid, torrent_id)
+    res = requests.get(url, timeout=8).text
+    magic_ratio = json.loads(res)["data"]["promotion_super"][0]["ratio"]
+    ratio = float(magic_ratio.split("/")[-1])
+    return ratio
 
 
 @retry(tries=5, delay=2)
 def magic_free_time(torrent_id):
     url = "https://u2.kysdm.com/api/v1/promotion_specific/?token=%s&uid=%s&torrent_id=%s" % (
         config.token, config.uid, torrent_id)
-    res = requests.get(url, timeout=3).text
+    res = requests.get(url, timeout=8).text
     magic_list = json.loads(res)["data"]["promotion"]
     time_list = []
     for i in magic_list:
-        t = compare_time(i["from_time"], i["expiration_time"])
         ratio = float(i["ratio"].split("/")[-1])
-        if i["for_user_name"] == "[i]所有人[/i]" and ratio == 0:
+        # 全局生效、下载为0的才计入Free
+        if i["torrent_name"] == "全局" and ratio == 0:
+            if i["expiration_time"] is None:
+                t = 3600 * 24 * 365
+            else:
+                t = compare_time(i["from_time"], i["expiration_time"])
             time_list.append(t)
         else:
             time_list.append(0)
@@ -169,16 +186,22 @@ while True:
         if len(res_id) >= config.download_num:
             download_list = random.sample(res_id, config.download_num)
         else:
-            logger.info("原盘孤种较少，本次不推送")
+            logger.info("原盘孤种较少，本次不推送，开始待机")
             time.sleep(config.interval * 3600)
             continue
         logger.debug(download_list)
+        # 遍历种子
         for t_id in download_list:
             logger.info("当前种子id为：%s" % t_id)
+            # Free剩余时间大于设定值
             if magic_free_time(t_id) > config.free_hours * 3600:
                 magic_res = True
                 logger.info("蹭到了其他大佬的Free")
-            else:
+            # elif magic_sta(t_id) == 0:
+            #    logger.info("此种Free,无法判断剩余时间")
+            #    magic_res = True
+            else:  # 非Free种
+                # 释放魔法
                 if config.magic:
                     logger.debug("准备释放魔法")
                     m_cost = magic_use(False, t_id)
@@ -188,18 +211,23 @@ while True:
                     else:
                         logger.info("魔法花费过高:%s,跳过此种子" % m_cost)
                         continue
+                # 头铁硬上
                 else:
-                    magic_res = True
-            if magic_res and config.down:
-                for _ in range(3):
-                    if os.path.exists("./torrents/%s.torrent" % t_id):
-                        logger.debug("种子已存在")
-                        push_torrent(t_id, "./torrents/%s.torrent" % t_id)
-                        logger.info("种子推送完毕")
-                        break
-                    else:
-                        logger.debug("id：%s 种子开始下载" % t_id)
-                        download_torrent(t_id)
+                    magic_res = False
+            if config.down:  # 下载开关
+                # Free存在或头铁硬上
+                if magic_res or config.tou_tie:
+                    for _ in range(3):
+                        if os.path.exists("./torrents/%s.torrent" % t_id):
+                            logger.debug("种子已存在")
+                            push_torrent(t_id, "./torrents/%s.torrent" % t_id)
+                            logger.info("种子推送完毕")
+                            break
+                        else:
+                            logger.debug("id：%s 种子开始下载" % t_id)
+                            download_torrent(t_id)
+                else:
+                    logger.info("非Free种且未释放魔法，跳过")
     except Exception as e:
         logger.warning(e)
     logger.info("本次流程完毕，开始待机")
