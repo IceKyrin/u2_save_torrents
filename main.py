@@ -170,6 +170,7 @@ while True:
             download_list = random.sample(res_id, config.download_num)
         else:
             logger.info("原盘孤种较少，本次不推送")
+            time.sleep(config.interval * 3600)
             continue
         logger.debug(download_list)
         for t_id in download_list:
