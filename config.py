@@ -1,4 +1,5 @@
 # 所有选项除了注明外，填写True/False
+# 存在老种永久Free不识别的情况，此种跳过。需要时间更新数据库
 # qb连接设置
 CLIENT_IP = '192.168.2.177'
 CLIENT_PORT = 8080
@@ -30,6 +31,8 @@ download_num = 2
 minimum = 1
 maximum = 2
 
+# 非Free种、自己不放魔法头铁硬上（会产生下载量！！！）
+tou_tie = False
 # 是否释放魔法，每次最大花费（每金为10000），费用超了这个种子直接跳过不下。魔法持续时间最低24，生效范围"ALL"/"SELF"
 magic = True
 max_cost = 15000
