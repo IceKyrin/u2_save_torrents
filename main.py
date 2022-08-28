@@ -80,7 +80,7 @@ def compare_time(t1, t2):
     t0 = int(str(round(time.time())))
     t1 = int(time.mktime(time.strptime(t1, '%Y-%m-%dT%H:%M:%S')))
     t2 = int(time.mktime(time.strptime(t2, '%Y-%m-%dT%H:%M:%S')))
-    if t1 > t0:
+    if t0 > t1:
         return t2 - t1
     else:
         return 0
