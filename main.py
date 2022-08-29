@@ -104,11 +104,12 @@ def magic_free_time(torrent_id):
         config.token, config.uid, torrent_id)
     res = requests.get(url, timeout=8).text
     magic_list = json.loads(res)["data"]["promotion"]
+    logger.debug(magic_list)
     time_list = []
     for i in magic_list:
         ratio = float(i["ratio"].split("/")[-1])
         # 全局生效、下载为0的才计入Free
-        if i["torrent_name"] == "全局" and ratio == 0:
+        if i["torrent_name"] == "全局" and i["for_user_name"] == '[i]所有人[/i]' and ratio == 0:
             if i["expiration_time"] is None:
                 t = 3600 * 24 * 365
             else:
