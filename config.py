@@ -27,9 +27,10 @@ down = True
 # 每次下载数量；只保BDMV/DVDISO时，一次3-5个就不少了，别太高
 download_num = 2
 
-# 孤种筛选条件（最大/最小做种人数）
+# 孤种筛选条件（最大/最小做种人数）、容量（G）
 minimum = 1
 maximum = 2
+size = 100
 
 # 非Free种、自己不放魔法头铁硬上（会产生下载量！！！）
 tou_tie = False
