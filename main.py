@@ -206,7 +206,7 @@ while True:
                         # 判断释放魔法并下载，或跳过（花费过高）
                         if m_cost < config.max_cost:
                             magic_res = magic_use(config.magic, t_id)
-                            logger.debug("本次花费%" % m_cost)
+                            logger.debug("本次花费%s" % m_cost)
                         else:
                             logger.info("魔法花费过高:%s,跳过此种子" % m_cost)
                             continue
