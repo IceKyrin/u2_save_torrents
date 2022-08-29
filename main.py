@@ -67,7 +67,7 @@ def magic_use(sta, torrent_id):
             logger.info("魔法释放成功")
             return True
         elif str(res) == '<Response [200]>' and not sta:
-            cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>$", res.text).group(1).split(".")[0].replace(",", ""))
+            cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>", res.text).group(1).split(".")[0].replace(",", ""))
             logger.debug("获取魔法费用成功")
             return cost
         return False
