@@ -188,44 +188,46 @@ while True:
             download_list = res_id
             logger.info("符合条件的孤种较少，本次仅推送%s个种子" % len(res_id))
         logger.debug(download_list)
+
         # 遍历种子
         for t_id in download_list:
-            logger.info("当前种子id为：%s" % t_id)
-            # Free剩余时间大于设定值
-            if magic_free_time(t_id) > config.free_hours * 3600:
-                magic_res = True
-                logger.info("蹭到了其他大佬的Free")
-            # elif magic_sta(t_id) == 0:
-            #    logger.info("此种Free,无法判断剩余时间")
-            #    magic_res = True
-            else:  # 非Free种
-                # 释放魔法
-                if config.magic:
-                    logger.debug("准备释放魔法")
-                    m_cost = magic_use(False, t_id)
-                    # 判断释放魔法并下载，或跳过（花费过高）
-                    if m_cost < config.max_cost:
-                        magic_res = magic_use(config.magic, t_id)
-                    else:
-                        logger.info("魔法花费过高:%s,跳过此种子" % m_cost)
-                        continue
-                # 头铁硬上
-                else:
-                    magic_res = False
-            if config.down:  # 下载开关
-                # Free存在或头铁硬上
-                if magic_res or config.tou_tie:
-                    for _ in range(3):
-                        if os.path.exists("./torrents/%s.torrent" % t_id):
-                            logger.debug("种子已存在")
-                            push_torrent(t_id, "./torrents/%s.torrent" % t_id)
-                            logger.info("种子推送完毕")
-                            break
+            try:
+                logger.info("当前种子id为：%s" % t_id)
+                # Free剩余时间大于设定值
+                if magic_free_time(t_id) > config.free_hours * 3600:
+                    magic_res = True
+                    logger.info("蹭到了其他大佬的Free")
+                else:  # 非Free种
+                    # 释放魔法
+                    if config.magic:
+                        logger.debug("准备释放魔法")
+                        m_cost = magic_use(False, t_id)
+                        # 判断释放魔法并下载，或跳过（花费过高）
+                        if m_cost < config.max_cost:
+                            magic_res = magic_use(config.magic, t_id)
+                            logger.debug("本次花费%" % m_cost)
                         else:
-                            logger.debug("id：%s 种子开始下载" % t_id)
-                            download_torrent(t_id)
-                else:
-                    logger.info("非Free种且未释放魔法，跳过")
+                            logger.info("魔法花费过高:%s,跳过此种子" % m_cost)
+                            continue
+                    # 头铁硬上
+                    else:
+                        magic_res = False
+                if config.down:  # 下载开关
+                    # Free存在或头铁硬上
+                    if magic_res or config.tou_tie:
+                        for _ in range(3):
+                            if os.path.exists("./torrents/%s.torrent" % t_id):
+                                logger.debug("种子已存在")
+                                push_torrent(t_id, "./torrents/%s.torrent" % t_id)
+                                logger.info("种子推送完毕")
+                                break
+                            else:
+                                logger.debug("id：%s 种子开始下载" % t_id)
+                                download_torrent(t_id)
+                    else:
+                        logger.info("非Free种且未释放魔法，跳过")
+            except Exception as e:
+                logger.warning(e)
     except Exception as e:
         logger.warning(e)
     logger.info("本次流程完毕，开始待机")
