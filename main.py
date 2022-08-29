@@ -38,7 +38,6 @@ def download_torrent(torrent_id):
         logger.warning("种子下载失败")
 
 
-        
 @retry(tries=3, delay=2)
 def magic_use(sta, torrent_id):
     use = "" if sta else "test=1"
