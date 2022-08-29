@@ -33,7 +33,6 @@ def download_torrent(torrent_id):
         with open('./torrents/%s.torrent' % torrent_id, 'wb') as f:
             f.write(r.content)
         logger.debug("种子下载完毕")
-
     except Exception as e:
         logger.warning(e)
         logger.warning("种子下载失败")
@@ -68,7 +67,7 @@ def magic_use(sta, torrent_id):
             logger.info("魔法释放成功")
             return True
         elif str(res) == '<Response [200]>' and not sta:
-            cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>", res.text).group(1).split(".")[0].replace(",", ""))
+            cost = int(re.search("title=.*?([\d,]*\.\d{,2}).*?>$", res.text).group(1).split(".")[0].replace(",", ""))
             logger.debug("获取魔法费用成功")
             return cost
         return False
@@ -89,7 +88,7 @@ def compare_time(t1, t2):
         logger.warning(e)
 
 
-@retry(tries=5, delay=2)
+@retry(tries=3, delay=2)
 def magic_sta(torrent_id):
     url = "https://u2.kysdm.com/api/v1/promotion_super/?token=%s&uid=%s&torrent_id=%s" % (
         config.token, config.uid, torrent_id)
@@ -99,7 +98,7 @@ def magic_sta(torrent_id):
     return ratio
 
 
-@retry(tries=5, delay=2)
+@retry(tries=3, delay=2)
 def magic_free_time(torrent_id):
     url = "https://u2.kysdm.com/api/v1/promotion_specific/?token=%s&uid=%s&torrent_id=%s" % (
         config.token, config.uid, torrent_id)
@@ -130,14 +129,6 @@ def get_torrent(num):
     return torrent_list
 
 
-def hash_to_id(torrent_hash):
-    url = "https://u2.kysdm.com/api/v1/history/?token=%s&maximum=1&uid=%s&hash=%s" % (
-        config.token, config.uid, torrent_hash)
-    res = requests.get(url, timeout=8).text
-    torrent_id = json.loads(res)["data"]["history"][0]["torrent_id"]
-    return torrent_id
-
-
 def push_torrent(torrent_id, file_name):
     path = config.save_path
     if config.add_id:
@@ -152,11 +143,11 @@ def pluck(lst, key):
 def qb_login():
     try:
         # 登陆
-        qbt_client = qbittorrentapi.Client(host=config.CLIENT_IP, port=config.CLIENT_PORT, username=config.CLIENT_USER,
-                                           password=config.CLIENT_PASSWORD)
-        qbt_client.auth_log_in()
+        qb_client = qbittorrentapi.Client(host=config.CLIENT_IP, port=config.CLIENT_PORT, username=config.CLIENT_USER,
+                                          password=config.CLIENT_PASSWORD)
+        qb_client.auth_log_in()
         logger.info("登录qb成功")
-        return qbt_client
+        return qb_client
     except Exception as e:
         logger.warning(e)
         logger.warning("登录失败，请检查qb webui 的ip、端口及账号密码")
@@ -177,18 +168,25 @@ while True:
             for info in raw_lists:
                 if info["category"] == "BDMV" or info["category"] == "DVDISO":
                     torrent_lists.append(info)
+            raw_lists = torrent_lists
         else:
             # 获取下载数x5的列表
-            torrent_lists = get_torrent(5)
+            raw_lists = get_torrent(5)
             logger.debug("拉取孤种列表成功")
+        # 筛选容量
+        torrent_lists = []
+        # 筛选出原盘
+        for info in raw_lists:
+            if info["torrent_size"] <= config.size * 1024 ** 3:
+                torrent_lists.append(info)
+        logger.debug(torrent_lists)
         # 随机筛选出下载的种子（防止拉孤种时和其他人撞车）
-        res_id = pluck(torrent_lists, 'torrent_id')
+        res_id = pluck(torrent_lists, 'torrent_id')  # 提取id列表
         if len(res_id) >= config.download_num:
             download_list = random.sample(res_id, config.download_num)
         else:
-            logger.info("原盘孤种较少，本次不推送，开始待机")
-            time.sleep(config.interval * 3600)
-            continue
+            download_list = res_id
+            logger.info("符合条件的孤种较少，本次仅推送%s个种子" % len(res_id))
         logger.debug(download_list)
         # 遍历种子
         for t_id in download_list:
