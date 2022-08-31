@@ -12,15 +12,14 @@ import qbittorrentapi
 from retry import retry
 from loguru import logger
 
+header = config.header
+header["cookie"] = config.cookie
 # 日志文件
 LOG_DIR = os.path.expanduser("./logs")
 LOG_FILE = os.path.join(LOG_DIR, "file_{time}.log")
 if not os.path.exists(LOG_DIR):
     os.mkdir(LOG_DIR)
 logger.add(LOG_FILE, rotation="7 days", level=config.level, backtrace=True, diagnose=True, encoding="utf-8")
-
-header = config.header
-header["cookie"] = config.cookie
 
 
 def download_torrent(torrent_id):
@@ -45,8 +44,8 @@ def magic_use(sta, torrent_id):
     url = "https://u2.dmhy.org/promotion.php?" + use
     data = {"action": "magic",
             "dr": config.download_ratio,
-            "hours": config.magic_hours,
-            "promotion": 8,
+            "hours": min(config.magic_hours, 24),
+            "promotion": 8 if config.customize else 2,
             "start": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "torrent": torrent_id,
             "tsize": round(time.time()),
