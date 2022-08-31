@@ -20,6 +20,7 @@ if not os.path.exists(LOG_DIR):
 logger.add(LOG_FILE, rotation="7 days", level=config.level, backtrace=True, diagnose=True, encoding="utf-8")
 
 header = config.header
+header["cookie"] = config.cookie
 
 
 def download_torrent(torrent_id):
@@ -43,14 +44,9 @@ def magic_use(sta, torrent_id):
     use = "" if sta else "test=1"
     url = "https://u2.dmhy.org/promotion.php?" + use
     data = {"action": "magic",
-            "base_everyone": 1200,
-            "base_other": 500,
-            "base_self": 350,
-            "comment": None,
-            "divergence": 9.331,
             "dr": config.download_ratio,
             "hours": config.magic_hours,
-            "promotion": 2,
+            "promotion": 8,
             "start": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "torrent": torrent_id,
             "tsize": round(time.time()),
@@ -59,11 +55,12 @@ def magic_use(sta, torrent_id):
             "user_other": None}
     try:
         if config.proxy:
-            res = requests.post(url=url, data=data, headers=header, proxies=config.proxies, timeout=8,
+            res = requests.post(url=url, data=data, headers=header, proxies=config.proxies, timeout=5,
                                 verify=config.verify)
         else:
-            res = requests.post(url=url, data=data, headers=header, verify=config.verify)
+            res = requests.post(url=url, data=data, headers=header, verify=config.verify, timeout=5)
         if str(res) == '<Response [200]>' and sta:
+            logger.debug(res.text)
             logger.info("魔法释放成功")
             return True
         elif str(res) == '<Response [200]>' and not sta:
@@ -154,7 +151,6 @@ def qb_login():
         logger.warning("登录失败，请检查qb webui 的ip、端口及账号密码")
 
 
-header["cookie"] = config.cookie
 if not os.path.exists("torrents"):
     os.mkdir("torrents")
 while True:
